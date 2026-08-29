@@ -1,4 +1,7 @@
 const storageKey = "apexFundingClients";
+const cloudConfigKey = "apexFundingSupabaseConfig";
+const cloudTableName = "clients";
+const defaultCloudBucket = "customer-files";
 
 const defaultClients = [
   {
@@ -104,6 +107,11 @@ const defaultClients = [
 ];
 
 let clients = loadClients().map(normalizeClient);
+const cloud = {
+  client: null,
+  enabled: false,
+  bucket: defaultCloudBucket,
+};
 
 const money = new Intl.NumberFormat("en-MY", {
   style: "currency",
@@ -164,6 +172,12 @@ const elements = {
   rejectReasonSection: document.querySelector("#rejectReasonSection"),
   rejectReasonText: document.querySelector("#rejectReasonText"),
   mediaPreviewList: document.querySelector("#mediaPreviewList"),
+  syncStatus: document.querySelector("#syncStatus"),
+  supabaseUrl: document.querySelector("#supabaseUrl"),
+  supabaseAnonKey: document.querySelector("#supabaseAnonKey"),
+  supabaseBucket: document.querySelector("#supabaseBucket"),
+  connectSupabase: document.querySelector("#connectSupabaseButton"),
+  disconnectSupabase: document.querySelector("#disconnectSupabaseButton"),
 };
 
 function loadClients() {
@@ -214,6 +228,125 @@ function clearStoredClients() {
   } catch {
     // Ignore unavailable storage.
   }
+}
+
+function readCloudConfig() {
+  try {
+    const stored = window.localStorage?.getItem(cloudConfigKey);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCloudConfig(config) {
+  try {
+    window.localStorage?.setItem(cloudConfigKey, JSON.stringify(config));
+  } catch {
+    // Cloud sync still works for this session if localStorage is unavailable.
+  }
+}
+
+function clearCloudConfig() {
+  try {
+    window.localStorage?.removeItem(cloudConfigKey);
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
+function updateSyncStatus(message, mode = "idle") {
+  if (!elements.syncStatus) {
+    return;
+  }
+
+  elements.syncStatus.textContent = message;
+  elements.syncStatus.dataset.mode = mode;
+}
+
+async function connectSupabase(loadRemote = true) {
+  const config = {
+    url: elements.supabaseUrl.value.trim(),
+    anonKey: elements.supabaseAnonKey.value.trim(),
+    bucket: elements.supabaseBucket.value.trim() || defaultCloudBucket,
+  };
+
+  if (!config.url || !config.anonKey) {
+    updateSyncStatus("Enter Supabase URL and anon key", "error");
+    return;
+  }
+
+  if (!window.supabase?.createClient) {
+    updateSyncStatus("Supabase SDK not loaded", "error");
+    return;
+  }
+
+  cloud.client = window.supabase.createClient(config.url, config.anonKey);
+  cloud.bucket = config.bucket;
+  cloud.enabled = true;
+  writeCloudConfig(config);
+  updateSyncStatus("Connected. Loading cloud data...", "syncing");
+
+  if (loadRemote) {
+    await pullClientsFromCloud();
+  }
+
+  updateSyncStatus("Connected to Supabase", "connected");
+}
+
+function disconnectSupabase() {
+  cloud.client = null;
+  cloud.enabled = false;
+  clearCloudConfig();
+  updateSyncStatus("Local only", "idle");
+}
+
+async function pullClientsFromCloud() {
+  if (!cloud.enabled) {
+    return;
+  }
+
+  const { data, error } = await cloud.client
+    .from(cloudTableName)
+    .select("payload")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    updateSyncStatus(`Cloud load failed: ${error.message}`, "error");
+    return;
+  }
+
+  const cloudClients = data
+    .map((row) => row.payload)
+    .filter(Boolean)
+    .map(normalizeClient);
+
+  if (cloudClients.length) {
+    clients = cloudClients;
+    state.activeId = clients[0].id;
+    saveClients();
+    render();
+  }
+}
+
+async function saveClientToCloud(client) {
+  if (!cloud.enabled) {
+    return;
+  }
+
+  updateSyncStatus("Syncing customer...", "syncing");
+  const { error } = await cloud.client.from(cloudTableName).upsert({
+    id: client.id,
+    payload: client,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    updateSyncStatus(`Cloud save failed: ${error.message}`, "error");
+    return;
+  }
+
+  updateSyncStatus("Saved to Supabase", "connected");
 }
 
 function filteredClients() {
@@ -534,20 +667,25 @@ async function createClientFromForm(form, existingClient = null) {
   const data = new FormData(form);
   const term = Number(data.get("term"));
   const paid = Math.min(Number(data.get("paid")), term);
+  const id = existingClient?.id || `c-${Date.now()}`;
   const assets = {
     ...(existingClient?.assets || {}),
-    avatar: (await fileAssetFromInput(form.elements.avatarFile)) || existingClient?.assets?.avatar,
-    icPhoto: (await fileAssetFromInput(form.elements.icPhotoFile)) || existingClient?.assets?.icPhoto,
-    selfie: (await fileAssetFromInput(form.elements.selfieFile)) || existingClient?.assets?.selfie,
+    avatar: (await fileAssetFromInput(form.elements.avatarFile, id, "avatar")) || existingClient?.assets?.avatar,
+    icPhoto: (await fileAssetFromInput(form.elements.icPhotoFile, id, "ic-photo")) || existingClient?.assets?.icPhoto,
+    selfie: (await fileAssetFromInput(form.elements.selfieFile, id, "selfie-with-ic")) || existingClient?.assets?.selfie,
     bankStatement:
-      (await fileAssetFromInput(form.elements.bankStatementFile)) || existingClient?.assets?.bankStatement,
+      (await fileAssetFromInput(form.elements.bankStatementFile, id, "bank-statement")) ||
+      existingClient?.assets?.bankStatement,
     businessRegistration:
-      (await fileAssetFromInput(form.elements.businessRegistrationFile)) || existingClient?.assets?.businessRegistration,
-    incomeProof: (await fileAssetFromInput(form.elements.incomeProofFile)) || existingClient?.assets?.incomeProof,
+      (await fileAssetFromInput(form.elements.businessRegistrationFile, id, "business-registration")) ||
+      existingClient?.assets?.businessRegistration,
+    incomeProof:
+      (await fileAssetFromInput(form.elements.incomeProofFile, id, "income-proof")) ||
+      existingClient?.assets?.incomeProof,
   };
 
   return {
-    id: existingClient?.id || `c-${Date.now()}`,
+    id,
     name: data.get("name").trim(),
     role: data.get("role").trim(),
     location: data.get("location").trim(),
@@ -576,10 +714,17 @@ async function createClientFromForm(form, existingClient = null) {
   };
 }
 
-function fileAssetFromInput(input) {
+async function fileAssetFromInput(input, clientId, key) {
   const file = input.files?.[0];
   if (!file) {
-    return Promise.resolve(null);
+    return null;
+  }
+
+  if (cloud.enabled) {
+    const cloudAsset = await uploadAssetToCloud(file, clientId, key);
+    if (cloudAsset) {
+      return cloudAsset;
+    }
   }
 
   return new Promise((resolve, reject) => {
@@ -594,6 +739,29 @@ function fileAssetFromInput(input) {
     reader.addEventListener("error", () => reject(reader.error));
     reader.readAsDataURL(file);
   });
+}
+
+async function uploadAssetToCloud(file, clientId, key) {
+  const safeName = file.name.replace(/[^a-z0-9._-]/gi, "-").toLowerCase();
+  const path = `${clientId}/${key}-${Date.now()}-${safeName}`;
+  const { error } = await cloud.client.storage.from(cloud.bucket).upload(path, file, {
+    cacheControl: "3600",
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
+
+  if (error) {
+    updateSyncStatus(`File upload failed: ${error.message}`, "error");
+    return null;
+  }
+
+  const { data } = cloud.client.storage.from(cloud.bucket).getPublicUrl(path);
+  return {
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    dataUrl: data.publicUrl,
+    storagePath: path,
+  };
 }
 
 function labelStatus(status) {
@@ -729,6 +897,7 @@ elements.form.addEventListener("submit", async (event) => {
   elements.search.value = "";
   elements.tabs.forEach((item) => item.classList.toggle("active", item.dataset.filter === "all"));
   saveClients();
+  await saveClientToCloud(editedClient);
   closeApplicationForm();
   render();
 });
@@ -743,6 +912,26 @@ elements.resetDemo.addEventListener("click", () => {
   clearStoredClients();
   render();
 });
+
+elements.connectSupabase.addEventListener("click", async () => {
+  await connectSupabase(true);
+});
+
+elements.disconnectSupabase.addEventListener("click", () => {
+  disconnectSupabase();
+});
+
+function restoreCloudSettings() {
+  const config = readCloudConfig() || window.APEX_SUPABASE_CONFIG;
+  if (!config) {
+    return;
+  }
+
+  elements.supabaseUrl.value = config.url || "";
+  elements.supabaseAnonKey.value = config.anonKey || "";
+  elements.supabaseBucket.value = config.bucket || defaultCloudBucket;
+  connectSupabase(true);
+}
 
 elements.search.addEventListener("input", (event) => {
   state.query = event.target.value;
@@ -766,3 +955,4 @@ elements.tabs.forEach((tab) => {
 });
 
 render();
+restoreCloudSettings();

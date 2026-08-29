@@ -48,6 +48,28 @@
           <p>Funding advisor</p>
           <a href="tel:+60355500128">+60 3-5550 0128</a>
         </section>
+
+        <section class="sync-panel" aria-label="Cloud sync settings">
+          <p class="eyebrow">Cloud Sync</p>
+          <h2>Supabase</h2>
+          <p id="syncStatus">Local only</p>
+          <label>
+            Project URL
+            <input id="supabaseUrl" type="url" placeholder="https://xxxx.supabase.co" />
+          </label>
+          <label>
+            Anon Key
+            <input id="supabaseAnonKey" type="password" placeholder="Paste anon public key" />
+          </label>
+          <label>
+            Storage Bucket
+            <input id="supabaseBucket" value="customer-files" />
+          </label>
+          <div class="sync-actions">
+            <button id="connectSupabaseButton" class="sync-button" type="button">Connect</button>
+            <button id="disconnectSupabaseButton" class="sync-button secondary" type="button">Disconnect</button>
+          </div>
+        </section>
       </aside>
 
       <main class="workspace">
@@ -348,6 +370,8 @@
       </main>
     </div>
 
-    <script src="./portal.js?v=free-amounts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./supabase-config.js?v=1"></script>
+    <script src="./portal.js?v=supabase-auto"></script>
   </body>
 </html>

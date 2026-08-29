@@ -118,6 +118,90 @@ textarea {
   font-weight: 700;
 }
 
+.sync-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sync-panel h2,
+.sync-panel p {
+  margin: 0;
+}
+
+.sync-panel h2 {
+  font-size: 16px;
+}
+
+.sync-panel label {
+  display: grid;
+  gap: 6px;
+  color: #cfe0ff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.sync-panel input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+
+.sync-panel input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(84, 200, 247, 0.16);
+}
+
+#syncStatus {
+  color: #cfe0ff;
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+#syncStatus[data-mode="connected"] {
+  color: #d8fff2;
+}
+
+#syncStatus[data-mode="syncing"] {
+  color: #eaf6ff;
+}
+
+#syncStatus[data-mode="error"] {
+  color: #ffe1e4;
+}
+
+.sync-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sync-button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #04142f;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sync-button.secondary {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 .workspace {
   padding: 30px;
 }
@@ -778,6 +862,10 @@ button.table-row:hover {
     display: none;
   }
 
+  .sync-panel {
+    max-width: 320px;
+  }
+
   .metric-grid,
   .detail-grid,
   .application-form,
@@ -807,6 +895,10 @@ button.table-row:hover {
 
   .nav-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sync-panel {
+    max-width: none;
   }
 
   .search-box input {
