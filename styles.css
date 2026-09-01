@@ -126,6 +126,10 @@ textarea {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.sync-panel[hidden] {
+  display: none !important;
+}
+
 .sync-panel h2,
 .sync-panel p {
   margin: 0;
