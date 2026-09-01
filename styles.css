@@ -110,11 +110,10 @@ textarea {
   font-size: 18px;
 }
 
-.manager-panel a {
+.manager-id {
   display: inline-block;
   margin-top: 14px;
   color: #ffffff;
-  text-decoration: none;
   font-weight: 700;
 }
 
