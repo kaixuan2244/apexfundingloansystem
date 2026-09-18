@@ -155,6 +155,7 @@ const elements = {
   profilePanel: document.querySelector("#profilePanel"),
   status: document.querySelector("#clientStatus"),
   name: document.querySelector("#clientName"),
+  loanType: document.querySelector("#loanType"),
   meta: document.querySelector("#clientMeta"),
   loanAmount: document.querySelector("#loanAmount"),
   loanTerm: document.querySelector("#loanTerm"),
@@ -201,6 +202,7 @@ function loadClients() {
 
 function normalizeClient(client) {
   return {
+    loanType: "Not specified",
     pendingReason: "",
     rejectReason: "",
     assets: {},
@@ -451,6 +453,7 @@ function renderProfile() {
   elements.status.outerHTML = renderStatusPill(active.status, "clientStatus");
   elements.status = document.querySelector("#clientStatus");
   elements.name.textContent = active.name;
+  elements.loanType.textContent = active.loanType;
   elements.meta.textContent = `${active.role} - ${active.location}`;
   elements.loanAmount.textContent = money.format(active.loanAmount);
   elements.loanTerm.textContent = `${active.term} months`;
@@ -735,6 +738,7 @@ async function createClientFromForm(form, existingClient = null) {
     phone: data.get("phone").trim(),
     email: data.get("email").trim() || "Not provided",
     address: data.get("address").trim(),
+    loanType: data.get("loanType"),
     loanAmount: Number(data.get("loanAmount")),
     term,
     monthlyPayment: Number(data.get("monthlyPayment")),
@@ -853,6 +857,7 @@ function populateForm(client) {
   fields.phone.value = client.phone;
   fields.email.value = client.email === "Not provided" ? "" : client.email;
   fields.address.value = client.address;
+  fields.loanType.value = client.loanType === "Not specified" ? "" : client.loanType;
   fields.loanAmount.value = client.loanAmount;
   fields.term.value = client.term;
   fields.monthlyPayment.value = client.monthlyPayment;
