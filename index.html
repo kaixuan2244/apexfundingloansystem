@@ -252,7 +252,7 @@
             <div id="clientList" class="client-list"></div>
           </section>
 
-          <section class="profile-panel" aria-label="Selected client profile">
+          <section id="profilePanel" class="profile-panel" aria-label="Selected client profile">
             <div class="profile-hero">
               <div class="avatar-wrap">
                 <img id="clientAvatar" src="" alt="" hidden />
@@ -263,7 +263,10 @@
                 <h2 id="clientName">Daniel Lim</h2>
                 <p id="clientMeta">SME Owner - Kuala Lumpur</p>
               </div>
-              <button id="editCustomerButton" class="hero-action" type="button">Edit</button>
+              <div class="profile-actions">
+                <button id="editCustomerButton" class="hero-action" type="button">Edit</button>
+                <button id="deleteCustomerButton" class="hero-action danger-action" type="button">Delete</button>
+              </div>
             </div>
 
             <div class="detail-grid">
@@ -383,6 +386,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=1"></script>
-    <script src="./portal.js?v=pending-reason-ms-haw"></script>
+    <script src="./portal.js?v=prevent-duplicates-delete-customer"></script>
   </body>
 </html>

@@ -127,6 +127,7 @@ const state = {
   query: "",
   view: getViewFromHash(),
   editingId: null,
+  isSubmitting: false,
 };
 
 const elements = {
@@ -137,6 +138,7 @@ const elements = {
   form: document.querySelector("#applicationForm"),
   cancelEdit: document.querySelector("#cancelEditButton"),
   editCustomer: document.querySelector("#editCustomerButton"),
+  deleteCustomer: document.querySelector("#deleteCustomerButton"),
   resetDemo: document.querySelector("#resetDemoButton"),
   viewSections: document.querySelectorAll(".view-section"),
   totalApproved: document.querySelector("#totalApproved"),
@@ -150,6 +152,7 @@ const elements = {
   tabs: document.querySelectorAll(".tab"),
   list: document.querySelector("#clientList"),
   count: document.querySelector("#clientCount"),
+  profilePanel: document.querySelector("#profilePanel"),
   status: document.querySelector("#clientStatus"),
   name: document.querySelector("#clientName"),
   meta: document.querySelector("#clientMeta"),
@@ -352,6 +355,35 @@ async function saveClientToCloud(client) {
   updateSyncStatus("Saved to Supabase", "connected");
 }
 
+async function deleteClientFromCloud(client) {
+  if (!cloud.enabled) {
+    return true;
+  }
+
+  updateSyncStatus("Deleting customer...", "syncing");
+  const { error } = await cloud.client.from(cloudTableName).delete().eq("id", client.id);
+
+  if (error) {
+    updateSyncStatus(`Cloud delete failed: ${error.message}`, "error");
+    return false;
+  }
+
+  const storagePaths = Object.values(client.assets || {})
+    .map((asset) => asset?.storagePath)
+    .filter(Boolean);
+
+  if (storagePaths.length) {
+    const { error: storageError } = await cloud.client.storage.from(cloud.bucket).remove(storagePaths);
+    if (storageError) {
+      updateSyncStatus(`Customer deleted, but file cleanup failed: ${storageError.message}`, "error");
+      return true;
+    }
+  }
+
+  updateSyncStatus("Customer deleted from Supabase", "connected");
+  return true;
+}
+
 function filteredClients() {
   const query = state.query.trim().toLowerCase();
   return clients.filter((client) => {
@@ -409,8 +441,10 @@ function renderClientList() {
 function renderProfile() {
   const active = getActiveClient();
   if (!active) {
+    elements.profilePanel.hidden = true;
     return;
   }
+  elements.profilePanel.hidden = false;
   state.activeId = active.id;
   const percent = Math.min(100, Math.round((active.paid / active.term) * 100));
 
@@ -886,27 +920,80 @@ elements.editCustomer.addEventListener("click", () => {
   renderViews();
 });
 
-elements.form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const existingClient = clients.find((client) => client.id === state.editingId);
-  const editedClient = await createClientFromForm(elements.form, existingClient);
-
-  if (state.editingId) {
-    clients = clients.map((client) => (client.id === state.editingId ? editedClient : client));
-  } else {
-    clients = [editedClient, ...clients];
+elements.deleteCustomer.addEventListener("click", async () => {
+  const active = getActiveClient();
+  if (!active || !window.confirm(`Delete ${active.name}? This cannot be undone.`)) {
+    return;
   }
 
-  state.activeId = editedClient.id;
-  state.filter = "all";
-  state.query = "";
-  state.editingId = null;
-  elements.search.value = "";
-  elements.tabs.forEach((item) => item.classList.toggle("active", item.dataset.filter === "all"));
+  elements.deleteCustomer.disabled = true;
+  elements.deleteCustomer.textContent = "Deleting...";
+  const deletedFromCloud = await deleteClientFromCloud(active);
+
+  if (!deletedFromCloud) {
+    elements.deleteCustomer.disabled = false;
+    elements.deleteCustomer.textContent = "Delete";
+    window.alert("Unable to delete this customer from Supabase. Please try again.");
+    return;
+  }
+
+  clients = clients.filter((client) => client.id !== active.id);
+  state.activeId = clients[0]?.id || null;
   saveClients();
-  await saveClientToCloud(editedClient);
-  closeApplicationForm();
   render();
+  elements.deleteCustomer.disabled = false;
+  elements.deleteCustomer.textContent = "Delete";
+});
+
+elements.form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.isSubmitting) {
+    return;
+  }
+
+  state.isSubmitting = true;
+  const submitButton = elements.form.querySelector("button[type='submit']");
+  const originalLabel = submitButton.textContent;
+  submitButton.disabled = true;
+  submitButton.textContent = "Saving...";
+
+  try {
+    const enteredIc = new FormData(elements.form).get("ic").trim().toLowerCase();
+    const duplicateClient = clients.find(
+      (client) => client.id !== state.editingId && client.ic.trim().toLowerCase() === enteredIc,
+    );
+    if (duplicateClient) {
+      window.alert(`${duplicateClient.name} already uses this IC / Passport. Open that customer and use Edit instead.`);
+      return;
+    }
+
+    const existingClient = clients.find((client) => client.id === state.editingId);
+    const editedClient = await createClientFromForm(elements.form, existingClient);
+
+    if (state.editingId) {
+      clients = clients.map((client) => (client.id === state.editingId ? editedClient : client));
+    } else {
+      clients = [editedClient, ...clients];
+    }
+
+    state.activeId = editedClient.id;
+    state.filter = "all";
+    state.query = "";
+    state.editingId = null;
+    elements.search.value = "";
+    elements.tabs.forEach((item) => item.classList.toggle("active", item.dataset.filter === "all"));
+    saveClients();
+    await saveClientToCloud(editedClient);
+    closeApplicationForm();
+    render();
+  } catch (error) {
+    console.error("Unable to save customer", error);
+    window.alert("Unable to save this customer. Please try again.");
+  } finally {
+    state.isSubmitting = false;
+    submitButton.disabled = false;
+    submitButton.textContent = originalLabel;
+  }
 });
 
 elements.resetDemo.addEventListener("click", () => {
