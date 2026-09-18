@@ -44,7 +44,7 @@
 
         <section class="manager-panel" aria-label="Account manager">
           <p class="eyebrow">ApexFunding Manager</p>
-          <h2>Mr.Haw</h2>
+          <h2>Ms.Haw</h2>
           <p>Loan Approval Manager</p>
           <span class="manager-id">ID: AF-LAM-001</span>
         </section>
@@ -194,6 +194,10 @@
               </select>
             </label>
             <label class="wide-field">
+              Pending Reason
+              <textarea name="pendingReason" placeholder="Type notes or the reason this application is pending"></textarea>
+            </label>
+            <label class="wide-field">
               Fail / Reject Reason
               <textarea name="rejectReason" placeholder="Type the reason if this application failed or was rejected"></textarea>
             </label>
@@ -305,6 +309,13 @@
               </dl>
             </section>
 
+            <section id="pendingReasonSection" class="info-section" hidden>
+              <div class="section-heading tight">
+                <h3>Pending Reason</h3>
+              </div>
+              <p id="pendingReasonText" class="reason-box pending-reason-box"></p>
+            </section>
+
             <section id="rejectReasonSection" class="info-section" hidden>
               <div class="section-heading tight">
                 <h3>Fail / Reject Reason</h3>
@@ -372,6 +383,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=1"></script>
-    <script src="./portal.js?v=supabase-auto-b72b248"></script>
+    <script src="./portal.js?v=pending-reason-ms-haw"></script>
   </body>
 </html>

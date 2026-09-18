@@ -169,6 +169,8 @@ const elements = {
   documents: document.querySelector("#documentList"),
   clientAvatar: document.querySelector("#clientAvatar"),
   clientInitials: document.querySelector("#clientInitials"),
+  pendingReasonSection: document.querySelector("#pendingReasonSection"),
+  pendingReasonText: document.querySelector("#pendingReasonText"),
   rejectReasonSection: document.querySelector("#rejectReasonSection"),
   rejectReasonText: document.querySelector("#rejectReasonText"),
   mediaPreviewList: document.querySelector("#mediaPreviewList"),
@@ -196,6 +198,7 @@ function loadClients() {
 
 function normalizeClient(client) {
   return {
+    pendingReason: "",
     rejectReason: "",
     assets: {},
     ...client,
@@ -433,6 +436,8 @@ function renderProfile() {
   elements.balance.textContent = money.format(active.balance);
   elements.nextDue.textContent = active.nextDue;
   elements.risk.textContent = active.risk;
+  elements.pendingReasonSection.hidden = active.status !== "pending";
+  elements.pendingReasonText.textContent = active.pendingReason || "No reason provided.";
   elements.rejectReasonSection.hidden = active.status !== "rejected";
   elements.rejectReasonText.textContent = active.rejectReason || "No reason provided.";
   renderMediaPreview(active);
@@ -690,6 +695,7 @@ async function createClientFromForm(form, existingClient = null) {
     role: data.get("role").trim(),
     location: data.get("location").trim(),
     status: data.get("status"),
+    pendingReason: data.get("pendingReason").trim(),
     rejectReason: data.get("rejectReason").trim(),
     ic: data.get("ic").trim(),
     phone: data.get("phone").trim(),
@@ -822,6 +828,7 @@ function populateForm(client) {
   fields.nextDue.value = client.rawNextDue || "";
   fields.status.value = client.status;
   fields.risk.value = client.risk;
+  fields.pendingReason.value = client.pendingReason || "";
   fields.rejectReason.value = client.rejectReason || "";
 }
 
