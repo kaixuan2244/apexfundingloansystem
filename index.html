@@ -206,6 +206,10 @@
               <textarea name="pendingReason" placeholder="Type notes or the reason this application is pending"></textarea>
             </label>
             <label class="wide-field">
+              Review Reason
+              <textarea name="reviewReason" placeholder="Type notes or the reason this application is under review"></textarea>
+            </label>
+            <label class="wide-field">
               Fail / Reject Reason
               <textarea name="rejectReason" placeholder="Type the reason if this application failed or was rejected"></textarea>
             </label>
@@ -331,6 +335,13 @@
               <p id="pendingReasonText" class="reason-box pending-reason-box"></p>
             </section>
 
+            <section id="reviewReasonSection" class="info-section" hidden>
+              <div class="section-heading tight">
+                <h3>Review Reason</h3>
+              </div>
+              <p id="reviewReasonText" class="reason-box"></p>
+            </section>
+
             <section id="rejectReasonSection" class="info-section" hidden>
               <div class="section-heading tight">
                 <h3>Fail / Reject Reason</h3>
@@ -398,6 +409,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=1"></script>
-    <script src="./portal.js?v=customer-loan-type"></script>
+    <script src="./portal.js?v=review-reason"></script>
   </body>
 </html>
