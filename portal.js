@@ -109,6 +109,7 @@ const defaultClients = [
 let clients = loadClients().map(normalizeClient);
 const cloud = {
   client: null,
+  config: null,
   enabled: false,
   bucket: defaultCloudBucket,
 };
@@ -287,19 +288,18 @@ async function connectSupabase(loadRemote = true) {
     return;
   }
 
-  if (!window.supabase?.createClient) {
-    updateSyncStatus("Supabase SDK not loaded", "error");
-    return;
-  }
-
-  cloud.client = window.supabase.createClient(config.url, config.anonKey);
+  cloud.config = config;
+  cloud.client = window.supabase?.createClient ? window.supabase.createClient(config.url, config.anonKey) : null;
   cloud.bucket = config.bucket;
   cloud.enabled = true;
   writeCloudConfig(config);
-  updateSyncStatus("Connected. Loading cloud data...", "syncing");
+  updateSyncStatus("Loading cloud data...", "syncing");
 
   if (loadRemote) {
-    await pullClientsFromCloud();
+    const loaded = await pullClientsFromCloud();
+    if (!loaded) {
+      return;
+    }
   }
 
   updateSyncStatus("Connected to Supabase", "connected");
@@ -307,6 +307,7 @@ async function connectSupabase(loadRemote = true) {
 
 function disconnectSupabase() {
   cloud.client = null;
+  cloud.config = null;
   cloud.enabled = false;
   clearCloudConfig();
   updateSyncStatus("Local only", "idle");
@@ -314,17 +315,35 @@ function disconnectSupabase() {
 
 async function pullClientsFromCloud() {
   if (!cloud.enabled) {
-    return;
+    return false;
   }
 
-  const { data, error } = await cloud.client
-    .from(cloudTableName)
-    .select("payload")
-    .order("updated_at", { ascending: false });
+  let data;
+  let error;
+
+  if (cloud.client) {
+    ({ data, error } = await cloud.client
+      .from(cloudTableName)
+      .select("payload")
+      .order("updated_at", { ascending: false }));
+  } else {
+    try {
+      const response = await fetch(`${cloud.config.url}/rest/v1/${cloudTableName}?select=payload&order=updated_at.desc`, {
+        headers: cloudHeaders(),
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      data = await response.json();
+    } catch (restError) {
+      error = restError;
+    }
+  }
 
   if (error) {
     updateSyncStatus(`Cloud load failed: ${error.message}`, "error");
-    return;
+    return false;
   }
 
   const cloudClients = data
@@ -338,6 +357,16 @@ async function pullClientsFromCloud() {
     saveClients();
     render();
   }
+
+  return true;
+}
+
+function cloudHeaders(extra = {}) {
+  return {
+    apikey: cloud.config.anonKey,
+    Authorization: `Bearer ${cloud.config.anonKey}`,
+    ...extra,
+  };
 }
 
 async function saveClientToCloud(client) {
@@ -346,11 +375,32 @@ async function saveClientToCloud(client) {
   }
 
   updateSyncStatus("Syncing customer...", "syncing");
-  const { error } = await cloud.client.from(cloudTableName).upsert({
+  const record = {
     id: client.id,
     payload: client,
     updated_at: new Date().toISOString(),
-  });
+  };
+  let error;
+
+  if (cloud.client) {
+    ({ error } = await cloud.client.from(cloudTableName).upsert(record));
+  } else {
+    try {
+      const response = await fetch(`${cloud.config.url}/rest/v1/${cloudTableName}?on_conflict=id`, {
+        method: "POST",
+        headers: cloudHeaders({
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        body: JSON.stringify(record),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (restError) {
+      error = restError;
+    }
+  }
 
   if (error) {
     updateSyncStatus(`Cloud save failed: ${error.message}`, "error");
@@ -366,7 +416,23 @@ async function deleteClientFromCloud(client) {
   }
 
   updateSyncStatus("Deleting customer...", "syncing");
-  const { error } = await cloud.client.from(cloudTableName).delete().eq("id", client.id);
+  let error;
+
+  if (cloud.client) {
+    ({ error } = await cloud.client.from(cloudTableName).delete().eq("id", client.id));
+  } else {
+    try {
+      const response = await fetch(
+        `${cloud.config.url}/rest/v1/${cloudTableName}?id=eq.${encodeURIComponent(client.id)}`,
+        { method: "DELETE", headers: cloudHeaders() },
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (restError) {
+      error = restError;
+    }
+  }
 
   if (error) {
     updateSyncStatus(`Cloud delete failed: ${error.message}`, "error");
@@ -378,7 +444,26 @@ async function deleteClientFromCloud(client) {
     .filter(Boolean);
 
   if (storagePaths.length) {
-    const { error: storageError } = await cloud.client.storage.from(cloud.bucket).remove(storagePaths);
+    let storageError;
+    if (cloud.client) {
+      ({ error: storageError } = await cloud.client.storage.from(cloud.bucket).remove(storagePaths));
+    } else {
+      try {
+        const response = await fetch(
+          `${cloud.config.url}/storage/v1/object/${encodeURIComponent(cloud.bucket)}`,
+          {
+            method: "DELETE",
+            headers: cloudHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ prefixes: storagePaths }),
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (restError) {
+        storageError = restError;
+      }
+    }
     if (storageError) {
       updateSyncStatus(`Customer deleted, but file cleanup failed: ${storageError.message}`, "error");
       return true;
@@ -641,8 +726,13 @@ function getAssetUrl(asset) {
   }
 
   if (cloud.enabled && asset.storagePath) {
-    const { data } = cloud.client.storage.from(cloud.bucket).getPublicUrl(asset.storagePath);
-    return data?.publicUrl || asset.dataUrl || "";
+    if (cloud.client) {
+      const { data } = cloud.client.storage.from(cloud.bucket).getPublicUrl(asset.storagePath);
+      return data?.publicUrl || asset.dataUrl || "";
+    }
+
+    const encodedPath = asset.storagePath.split("/").map(encodeURIComponent).join("/");
+    return `${cloud.config.url}/storage/v1/object/public/${encodeURIComponent(cloud.bucket)}/${encodedPath}`;
   }
 
   return asset.dataUrl || "";
@@ -843,22 +933,51 @@ async function fileAssetFromInput(input, clientId, key) {
 async function uploadAssetToCloud(file, clientId, key) {
   const safeName = file.name.replace(/[^a-z0-9._-]/gi, "-").toLowerCase();
   const path = `${clientId}/${key}-${Date.now()}-${safeName}`;
-  const { error } = await cloud.client.storage.from(cloud.bucket).upload(path, file, {
-    cacheControl: "3600",
-    contentType: file.type || "application/octet-stream",
-    upsert: true,
-  });
+  let error;
+
+  if (cloud.client) {
+    ({ error } = await cloud.client.storage.from(cloud.bucket).upload(path, file, {
+      cacheControl: "3600",
+      contentType: file.type || "application/octet-stream",
+      upsert: true,
+    }));
+  } else {
+    try {
+      const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+      const response = await fetch(
+        `${cloud.config.url}/storage/v1/object/${encodeURIComponent(cloud.bucket)}/${encodedPath}`,
+        {
+          method: "POST",
+          headers: cloudHeaders({
+            "Content-Type": file.type || "application/octet-stream",
+            "x-upsert": "true",
+          }),
+          body: file,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (restError) {
+      error = restError;
+    }
+  }
 
   if (error) {
     updateSyncStatus(`File upload failed: ${error.message}`, "error");
     return null;
   }
 
-  const { data } = cloud.client.storage.from(cloud.bucket).getPublicUrl(path);
+  const publicUrl = cloud.client
+    ? cloud.client.storage.from(cloud.bucket).getPublicUrl(path).data.publicUrl
+    : `${cloud.config.url}/storage/v1/object/public/${encodeURIComponent(cloud.bucket)}/${path
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`;
   return {
     name: file.name,
     type: file.type || "application/octet-stream",
-    dataUrl: data.publicUrl,
+    dataUrl: publicUrl,
     storagePath: path,
   };
 }
@@ -1077,7 +1196,7 @@ elements.disconnectSupabase.addEventListener("click", () => {
 });
 
 function restoreCloudSettings() {
-  const config = readCloudConfig() || window.APEX_SUPABASE_CONFIG;
+  const config = window.APEX_SUPABASE_CONFIG || readCloudConfig();
   if (!config) {
     return;
   }
