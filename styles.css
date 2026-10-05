@@ -243,6 +243,47 @@ textarea {
   gap: 12px;
 }
 
+.sync-health {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sync-health::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #f0a400;
+  content: "";
+}
+
+.sync-health[data-mode="connected"]::before {
+  background: #0f9f6e;
+}
+
+.sync-health[data-mode="error"]::before {
+  background: var(--red);
+}
+
+.sync-health button {
+  border: 0;
+  padding: 4px 6px;
+  color: var(--blue);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .search-box {
   display: grid;
   gap: 6px;
@@ -922,6 +963,11 @@ button.table-row:hover {
 
   .search-box input {
     width: 100%;
+  }
+
+  .sync-health {
+    justify-content: center;
+    white-space: normal;
   }
 
   .metric-grid,

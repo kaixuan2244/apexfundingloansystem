@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Apex Funding Client Portal</title>
     <meta
       name="description"
@@ -14,7 +17,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=mobile-sync-status" />
   </head>
   <body>
     <div class="app-shell">
@@ -79,6 +82,10 @@
             <h1>Loan Client Overview</h1>
           </div>
           <div class="topbar-actions">
+            <div id="syncHealth" class="sync-health" data-mode="syncing" role="status">
+              <span id="syncHealthText">Connecting to cloud...</span>
+              <button id="retrySyncButton" type="button" hidden>Retry</button>
+            </div>
             <label class="search-box">
               <span>Search</span>
               <input id="clientSearch" type="search" placeholder="Name, IC, company..." />
@@ -409,6 +416,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=1"></script>
-    <script src="./portal.js?v=mobile-cloud-sync-fix"></script>
+    <script src="./portal.js?v=mobile-sync-status-v2"></script>
   </body>
 </html>

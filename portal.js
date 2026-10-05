@@ -112,6 +112,7 @@ const cloud = {
   config: null,
   enabled: false,
   bucket: defaultCloudBucket,
+  lastSyncedCount: 0,
 };
 
 const money = new Intl.NumberFormat("en-MY", {
@@ -187,6 +188,9 @@ const elements = {
   supabaseBucket: document.querySelector("#supabaseBucket"),
   connectSupabase: document.querySelector("#connectSupabaseButton"),
   disconnectSupabase: document.querySelector("#disconnectSupabaseButton"),
+  syncHealth: document.querySelector("#syncHealth"),
+  syncHealthText: document.querySelector("#syncHealthText"),
+  retrySync: document.querySelector("#retrySyncButton"),
 };
 
 function loadClients() {
@@ -274,6 +278,9 @@ function updateSyncStatus(message, mode = "idle") {
 
   elements.syncStatus.textContent = message;
   elements.syncStatus.dataset.mode = mode;
+  elements.syncHealthText.textContent = message;
+  elements.syncHealth.dataset.mode = mode;
+  elements.retrySync.hidden = mode !== "error";
 }
 
 async function connectSupabase(loadRemote = true) {
@@ -302,7 +309,7 @@ async function connectSupabase(loadRemote = true) {
     }
   }
 
-  updateSyncStatus("Connected to Supabase", "connected");
+  updateSyncStatus(`${cloud.lastSyncedCount} records synced`, "connected");
 }
 
 function disconnectSupabase() {
@@ -326,7 +333,9 @@ async function pullClientsFromCloud() {
       .from(cloudTableName)
       .select("payload")
       .order("updated_at", { ascending: false }));
-  } else {
+  }
+
+  if (!cloud.client || error) {
     try {
       const response = await fetch(`${cloud.config.url}/rest/v1/${cloudTableName}?select=payload&order=updated_at.desc`, {
         headers: cloudHeaders(),
@@ -336,6 +345,7 @@ async function pullClientsFromCloud() {
         throw new Error(`HTTP ${response.status}`);
       }
       data = await response.json();
+      error = null;
     } catch (restError) {
       error = restError;
     }
@@ -350,6 +360,7 @@ async function pullClientsFromCloud() {
     .map((row) => row.payload)
     .filter(Boolean)
     .map(normalizeClient);
+  cloud.lastSyncedCount = cloudClients.length;
 
   if (cloudClients.length) {
     clients = cloudClients;
@@ -1195,6 +1206,10 @@ elements.disconnectSupabase.addEventListener("click", () => {
   disconnectSupabase();
 });
 
+elements.retrySync.addEventListener("click", async () => {
+  await connectSupabase(true);
+});
+
 function restoreCloudSettings() {
   const config = window.APEX_SUPABASE_CONFIG || readCloudConfig();
   if (!config) {
@@ -1230,3 +1245,13 @@ elements.tabs.forEach((tab) => {
 
 render();
 restoreCloudSettings();
+
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && cloud.enabled) {
+    updateSyncStatus("Refreshing cloud data...", "syncing");
+    const loaded = await pullClientsFromCloud();
+    if (loaded) {
+      updateSyncStatus(`${cloud.lastSyncedCount} records synced`, "connected");
+    }
+  }
+});
