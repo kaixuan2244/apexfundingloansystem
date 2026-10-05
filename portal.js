@@ -466,11 +466,8 @@ function renderProfile() {
   elements.phone.textContent = active.phone;
   elements.email.textContent = active.email;
   elements.address.textContent = active.address;
-  const avatar = active.assets.avatar;
-  elements.clientAvatar.hidden = !avatar;
-  elements.clientInitials.hidden = Boolean(avatar);
-  elements.clientAvatar.src = avatar?.dataUrl || "";
   elements.clientInitials.textContent = getInitials(active.name);
+  renderProfileAvatar(active);
   elements.paidLabel.textContent = `${active.paid} / ${active.term} paid`;
   elements.progress.style.width = `${percent}%`;
   elements.balance.textContent = money.format(active.balance);
@@ -638,6 +635,54 @@ function getActiveClient() {
   return clients.find((client) => client.id === state.activeId) || filteredClients()[0] || clients[0];
 }
 
+function getAssetUrl(asset) {
+  if (!asset) {
+    return "";
+  }
+
+  if (cloud.enabled && asset.storagePath) {
+    const { data } = cloud.client.storage.from(cloud.bucket).getPublicUrl(asset.storagePath);
+    return data?.publicUrl || asset.dataUrl || "";
+  }
+
+  return asset.dataUrl || "";
+}
+
+function renderProfileAvatar(client) {
+  const avatarUrl = getAssetUrl(client.assets.avatar);
+  const expectedClientId = client.id;
+
+  elements.clientAvatar.onload = null;
+  elements.clientAvatar.onerror = null;
+  elements.clientAvatar.hidden = true;
+  elements.clientInitials.hidden = false;
+  elements.clientAvatar.removeAttribute("src");
+  elements.clientAvatar.alt = `${client.name} profile photo`;
+
+  if (!avatarUrl) {
+    return;
+  }
+
+  elements.clientAvatar.onload = () => {
+    if (getActiveClient()?.id !== expectedClientId) {
+      return;
+    }
+    elements.clientAvatar.hidden = false;
+    elements.clientInitials.hidden = true;
+  };
+
+  elements.clientAvatar.onerror = () => {
+    if (getActiveClient()?.id !== expectedClientId) {
+      return;
+    }
+    elements.clientAvatar.hidden = true;
+    elements.clientInitials.hidden = false;
+    elements.clientAvatar.removeAttribute("src");
+  };
+
+  elements.clientAvatar.src = avatarUrl;
+}
+
 function renderMediaPreview(client) {
   const previewAssets = [
     ["Customer Avatar", client.assets.avatar],
@@ -768,6 +813,10 @@ async function fileAssetFromInput(input, clientId, key) {
   const file = input.files?.[0];
   if (!file) {
     return null;
+  }
+
+  if (key === "avatar" && !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+    throw new Error("Customer Avatar must be a JPG, PNG, WebP, or GIF image.");
   }
 
   if (cloud.enabled) {
@@ -1000,7 +1049,7 @@ elements.form.addEventListener("submit", async (event) => {
     render();
   } catch (error) {
     console.error("Unable to save customer", error);
-    window.alert("Unable to save this customer. Please try again.");
+    window.alert(error.message || "Unable to save this customer. Please try again.");
   } finally {
     state.isSubmitting = false;
     submitButton.disabled = false;
