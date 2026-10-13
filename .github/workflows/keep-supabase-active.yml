@@ -1,0 +1,25 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    - cron: "17 1,9,17 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send a small database request
+        env:
+          SUPABASE_URL: https://fkdewyioxbdwwsspysiv.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_B9mqFEhpxqxBz2w0rNGjBw_Z-um0TRp
+        run: |
+          curl --fail --silent --show-error \
+            --output /dev/null \
+            --header "apikey: ${SUPABASE_ANON_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/clients?select=id&limit=1"
